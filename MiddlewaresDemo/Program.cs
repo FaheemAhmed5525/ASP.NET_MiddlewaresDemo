@@ -35,33 +35,50 @@ var builder = WebApplication.CreateBuilder();
 
 // ------------------- Services Configuration -------------------
 
-// Enable rate limiting with a named policy
-builder.Services.AddRateLimiter(options =>
-{
-    options.AddFixedWindowLimiter("controlledResources", option =>
-    {
-        option.PermitLimit = 8;
-        option.Window = TimeSpan.FromSeconds(8);
-        option.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        option.QueueLimit = 2;
-    });
+// Enable fixed rate limiting with a named policy
+//builder.Services.AddRateLimiter(options =>
+//{
+//    options.AddFixedWindowLimiter("controlledResources", option =>
+//    {
+//        option.PermitLimit = 8;
+//        option.Window = TimeSpan.FromSeconds(8);
+//        option.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+//        option.QueueLimit = 2;
+//    });
 
-    // Optional: Global rate limiting (disabled by default)
-    /*
-    options.RejectionStatusCode = 429;
-    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: httpContext.User.Identity?.Name ?? httpContext.Request.Headers.Host.ToString(),
-            factory: partition => new FixedWindowRateLimiterOptions
-            {
-                AutoReplenishment = true,
-                PermitLimit = 10,
-                QueueLimit = 0,
-                Window = TimeSpan.FromMinutes(1)
-            })
-    );
-    */
-});
+// Optional: Global rate limiting (disabled by default)
+/*
+options.RejectionStatusCode = 429;
+options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+    RateLimitPartition.GetFixedWindowLimiter(
+        partitionKey: httpContext.User.Identity?.Name ?? httpContext.Request.Headers.Host.ToString(),
+        factory: partition => new FixedWindowRateLimiterOptions
+        {
+            AutoReplenishment = true,
+            PermitLimit = 10,
+            QueueLimit = 0,
+            Window = TimeSpan.FromMinutes(1)
+        })
+);
+//    */
+//});
+
+
+///Slider rate limit with a nmed policy
+var rateOptions = new RateLimiterOptions();
+
+builder.Configuration.GetSection("SliderRateLimiter").Bind(rateOptions);
+
+builder.Services.AddRateLimiter(options =>
+options.AddSlidingWindowLimiter(policyName: "sliding", option =>
+{
+    option.PermitLimit = 64;
+    option.Window =TimeSpan.FromSeconds(8);
+    option.SegmentsPerWindow = 8;
+    option.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+    option.QueueLimit = 4;
+}
+));
 
 var app = builder.Build();
 
@@ -108,8 +125,8 @@ app.UseRateLimiter();
 //app.Map("/goodmorning", SayGoodMorning);
 
 // Rate limited endpoint
-app.MapGet("/resources/controlled", () => Results.Ok("This endpoint is rate limited"))
-    .RequireRateLimiting("controlledResources");
+app.MapGet("/resources/controlled", () => Results.Ok("This endpoint is rate limited"))              //https://localhost:7093/resources/controlled
+    .RequireRateLimiting("sliding");
 
 //// ------------------- Fallback -------------------
 

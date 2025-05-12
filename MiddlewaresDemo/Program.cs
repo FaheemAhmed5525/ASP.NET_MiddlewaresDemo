@@ -98,18 +98,81 @@ options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpC
 //}));
 
 
-//Conurrency limiter with named policy
+////Conurrency limiter with named policy
+//var rateOptions = new RateLimiterOptions();
+
+//builder.Configuration.GetSection("ConcurrencyLimiter").Bind(rateOptions);
+
+//builder.Services.AddRateLimiter(options =>
+//options.AddConcurrencyLimiter(policyName: "concurrency", option =>
+//{
+//    option.PermitLimit = 64;
+//    option.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+//    option.QueueLimit = 4;
+//}));
+
+
 var rateOptions = new RateLimiterOptions();
 
-builder.Configuration.GetSection("ConcurrencyLimiter").Bind(rateOptions);
+//// --------------- Rate Limiting Partitions -----------------
 
+////Rate limiter by ip address
+//builder.Services.AddRateLimiter(options =>
+//{
+//    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+//    RateLimitPartition.GetFixedWindowLimiter(
+//        partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+//        factory: _ => new FixedWindowRateLimiterOptions
+//        {
+//            PermitLimit = 10,
+//            Window = TimeSpan.FromMinutes(1)
+//        }
+//    ));
+
+//});
+
+
+////Rate limter by user identity 
+//builder.Services.AddRateLimiter(options =>
+//{
+//    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+//    RateLimitPartition.GetFixedWindowLimiter(
+//        partitionKey: httpContext.User.Identity?.ToString() ?? "anonomys",
+//        factory: _ => new FixedWindowRateLimiterOptions
+//        {
+//            PermitLimit = 2,
+//            Window = TimeSpan.FromMinutes(1)
+//        }
+//    ));
+//});
+
+//Rate Limiter by Api key
 builder.Services.AddRateLimiter(options =>
-options.AddConcurrencyLimiter(policyName: "concurrency", option =>
 {
-    option.PermitLimit = 64;
-    option.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-    option.QueueLimit = 4;
-}));
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+    {
+        string apiKey = httpContext.Request.Headers["X-API-Key"].ToString() ?? "no-key";
+
+        return apiKey switch
+        {
+            "premium-key" => RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: apiKey,
+                factory: _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 4,
+                    Window = TimeSpan.FromMinutes(1)
+                }
+            ),
+            _ => RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: apiKey,
+                factory: _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 2,
+                    Window = TimeSpan.FromMinutes(1)
+                })
+        };
+    });
+});
 
 
 
@@ -158,15 +221,15 @@ app.UseRateLimiter();
 //app.Map("/goodmorning", SayGoodMorning);
 
 // Rate limited endpoint
-app.MapGet("/resources/controlled", () => Results.Ok("This endpoint is rate limited"))              //https://localhost:7093/resources/controlled
-    .RequireRateLimiting("concurrency");
+//app.MapGet("/resources/controlled", () => Results.Ok("This endpoint is rate limited"))              //https://localhost:7093/resources/controlled
+//    .RequireRateLimiting("concurrency");
 
 //// ------------------- Fallback -------------------
 
-//app.MapFallback(async context =>
-//{
-//    await context.Response.WriteAsync("Welcome to ASP.NET Middleware demo Project");
-//});
+app.MapFallback(async context =>
+{
+    await context.Response.WriteAsync("Welcome to ASP.NET Middleware demo Project");
+});
 
 app.Run();
 

@@ -81,20 +81,34 @@ options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpC
 //));
 
 
-//Token bucket limit with named policy
+////Token bucket limit with named policy
+//var rateOptions = new RateLimiterOptions();
+
+//builder.Configuration.GetSection("TokenBucketLimiter").Bind(rateOptions);
+
+//builder.Services.AddRateLimiter(options =>
+//options.AddTokenBucketLimiter(policyName: "tokenBucket", option =>
+//{
+//    option.TokenLimit = 10;
+//    option.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+//    option.QueueLimit = 4;
+//    option.ReplenishmentPeriod = TimeSpan.FromSeconds(2);
+//    option.TokensPerPeriod = 4;
+//    option.AutoReplenishment = false;
+//}));
+
+
+//Conurrency limiter with named policy
 var rateOptions = new RateLimiterOptions();
 
-builder.Configuration.GetSection("TokenBucketLimiter").Bind(rateOptions);
+builder.Configuration.GetSection("ConcurrencyLimiter").Bind(rateOptions);
 
 builder.Services.AddRateLimiter(options =>
-options.AddTokenBucketLimiter(policyName: "tokenBucket", option =>
+options.AddConcurrencyLimiter(policyName: "concurrency", option =>
 {
-    option.TokenLimit = 10;
+    option.PermitLimit = 64;
     option.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
     option.QueueLimit = 4;
-    option.ReplenishmentPeriod = TimeSpan.FromSeconds(2);
-    option.TokensPerPeriod = 4;
-    option.AutoReplenishment = false;
 }));
 
 
@@ -145,7 +159,7 @@ app.UseRateLimiter();
 
 // Rate limited endpoint
 app.MapGet("/resources/controlled", () => Results.Ok("This endpoint is rate limited"))              //https://localhost:7093/resources/controlled
-    .RequireRateLimiting("tokenBucket");
+    .RequireRateLimiting("concurrency");
 
 //// ------------------- Fallback -------------------
 

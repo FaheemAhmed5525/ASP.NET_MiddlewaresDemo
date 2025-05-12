@@ -64,21 +64,40 @@ options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpC
 //});
 
 
-///Slider rate limit with a nmed policy
+/////Slider rate limit with a nmed policy
+//var rateOptions = new RateLimiterOptions();
+
+//builder.Configuration.GetSection("SliderRateLimiter").Bind(rateOptions);
+
+//builder.Services.AddRateLimiter(options =>
+//options.AddSlidingWindowLimiter(policyName: "sliding", option =>
+//{
+//    option.PermitLimit = 64;
+//    option.Window =TimeSpan.FromSeconds(8);
+//    option.SegmentsPerWindow = 8;
+//    option.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+//    option.QueueLimit = 4;
+//}
+//));
+
+
+//Token bucket limit with named policy
 var rateOptions = new RateLimiterOptions();
 
-builder.Configuration.GetSection("SliderRateLimiter").Bind(rateOptions);
+builder.Configuration.GetSection("TokenBucketLimiter").Bind(rateOptions);
 
 builder.Services.AddRateLimiter(options =>
-options.AddSlidingWindowLimiter(policyName: "sliding", option =>
+options.AddTokenBucketLimiter(policyName: "tokenBucket", option =>
 {
-    option.PermitLimit = 64;
-    option.Window =TimeSpan.FromSeconds(8);
-    option.SegmentsPerWindow = 8;
+    option.TokenLimit = 10;
     option.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
     option.QueueLimit = 4;
-}
-));
+    option.ReplenishmentPeriod = TimeSpan.FromSeconds(2);
+    option.TokensPerPeriod = 4;
+    option.AutoReplenishment = false;
+}));
+
+
 
 var app = builder.Build();
 
@@ -126,7 +145,7 @@ app.UseRateLimiter();
 
 // Rate limited endpoint
 app.MapGet("/resources/controlled", () => Results.Ok("This endpoint is rate limited"))              //https://localhost:7093/resources/controlled
-    .RequireRateLimiting("sliding");
+    .RequireRateLimiting("tokenBucket");
 
 //// ------------------- Fallback -------------------
 

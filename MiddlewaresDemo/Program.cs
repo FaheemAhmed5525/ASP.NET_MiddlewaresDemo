@@ -27,6 +27,8 @@
 
 //app.Run();
 
+using System.Globalization;
+using System.Threading;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
 using MiddlewaresDemo;
@@ -175,33 +177,75 @@ var rateOptions = new RateLimiterOptions();
 //});
 
 
-//Rate limiter by Endpoint
-builder.Services.AddRateLimiter(options =>
-{
-    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
-    {
-        string path = httpContext.Request.Path.ToString();
+////Rate limiter by Endpoint
+//builder.Services.AddRateLimiter(options =>
+//{
+//    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+//    {
+//        string path = httpContext.Request.Path.ToString();
 
-        if (path.StartsWith("/api/public")) {
-            return RateLimitPartition.GetFixedWindowLimiter(
-                partitionKey: $"{httpContext.Connection.RemoteIpAddress}-public",
-                factory: _ => new FixedWindowRateLimiterOptions
-                {
-                    PermitLimit = 2,
-                    Window = TimeSpan.FromMinutes(1)
-                }
-            );
+//        if (path.StartsWith("/api/public")) {
+//            return RateLimitPartition.GetFixedWindowLimiter(
+//                partitionKey: $"{httpContext.Connection.RemoteIpAddress}-public",
+//                factory: _ => new FixedWindowRateLimiterOptions
+//                {
+//                    PermitLimit = 2,
+//                    Window = TimeSpan.FromMinutes(1)
+//                }
+//            );
+//        }
+//        return RateLimitPartition.GetFixedWindowLimiter(
+//            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+//            factory: _ => new FixedWindowRateLimiterOptions
+//            {
+//                PermitLimit = 5,
+//                Window = TimeSpan.FromMinutes(1)
+//            }
+//        );
+//    });
+//});
+
+
+
+//Chained linmt 
+builder.Services.AddRateLimiter(_ =>
+{
+    _.OnRejected = async (context, cancellationToken) =>
+    {
+        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+        {
+            context.HttpContext.Response.Headers.RetryAfter = ((int)retryAfter.TotalSeconds).ToString(NumberFormatInfo.InvariantInfo);
         }
-        return RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            factory: _ => new FixedWindowRateLimiterOptions
+        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        await context.HttpContext.Response.WriteAsync("Too many request. Please try laterl", cancellationToken);
+    };
+    _.GlobalLimiter = PartitionedRateLimiter.CreateChained(
+        PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+        {
+            var userAgent = httpContext.Request.Headers.UserAgent.ToString();
+
+            return RateLimitPartition.GetFixedWindowLimiter
+            (userAgent, _ => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = 5,
-                Window = TimeSpan.FromMinutes(1)
-            }
-        );
-    });
+                AutoReplenishment = true,
+                PermitLimit = 4,
+                Window = TimeSpan.FromSeconds(2)
+            });
+        }),
+        PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+        {
+            var userAgent = httpContext.Request.Headers.UserAgent.ToString();
+
+            return RateLimitPartition.GetFixedWindowLimiter
+            (userAgent, _ => new FixedWindowRateLimiterOptions
+            {
+                AutoReplenishment = true,
+                PermitLimit = 30,
+                Window = TimeSpan.FromSeconds(20)
+            });
+        }));
 });
+
 
 
 var app = builder.Build();

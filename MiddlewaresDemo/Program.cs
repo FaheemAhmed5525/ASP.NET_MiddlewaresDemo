@@ -146,34 +146,62 @@ var rateOptions = new RateLimiterOptions();
 //    ));
 //});
 
-//Rate Limiter by Api key
+////Rate Limiter by Api key
+//builder.Services.AddRateLimiter(options =>
+//{
+//    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+//    {
+//        string apiKey = httpContext.Request.Headers["X-API-Key"].ToString() ?? "no-key";
+
+//        return apiKey switch
+//        {
+//            "premium-key" => RateLimitPartition.GetFixedWindowLimiter(
+//                partitionKey: apiKey,
+//                factory: _ => new FixedWindowRateLimiterOptions
+//                {
+//                    PermitLimit = 4,
+//                    Window = TimeSpan.FromMinutes(1)
+//                }
+//            ),
+//            _ => RateLimitPartition.GetFixedWindowLimiter(
+//                partitionKey: apiKey,
+//                factory: _ => new FixedWindowRateLimiterOptions
+//                {
+//                    PermitLimit = 2,
+//                    Window = TimeSpan.FromMinutes(1)
+//                })
+//        };
+//    });
+//});
+
+
+//Rate limiter by Endpoint
 builder.Services.AddRateLimiter(options =>
 {
     options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
     {
-        string apiKey = httpContext.Request.Headers["X-API-Key"].ToString() ?? "no-key";
+        string path = httpContext.Request.Path.ToString();
 
-        return apiKey switch
-        {
-            "premium-key" => RateLimitPartition.GetFixedWindowLimiter(
-                partitionKey: apiKey,
-                factory: _ => new FixedWindowRateLimiterOptions
-                {
-                    PermitLimit = 4,
-                    Window = TimeSpan.FromMinutes(1)
-                }
-            ),
-            _ => RateLimitPartition.GetFixedWindowLimiter(
-                partitionKey: apiKey,
+        if (path.StartsWith("/api/public")) {
+            return RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: $"{httpContext.Connection.RemoteIpAddress}-public",
                 factory: _ => new FixedWindowRateLimiterOptions
                 {
                     PermitLimit = 2,
                     Window = TimeSpan.FromMinutes(1)
-                })
-        };
+                }
+            );
+        }
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(1)
+            }
+        );
     });
 });
-
 
 
 var app = builder.Build();

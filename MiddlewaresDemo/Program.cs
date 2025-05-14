@@ -207,44 +207,45 @@ var rateOptions = new RateLimiterOptions();
 
 
 
-//Chained linmt 
-builder.Services.AddRateLimiter(_ =>
-{
-    _.OnRejected = async (context, cancellationToken) =>
-    {
-        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
-        {
-            context.HttpContext.Response.Headers.RetryAfter = ((int)retryAfter.TotalSeconds).ToString(NumberFormatInfo.InvariantInfo);
-        }
-        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-        await context.HttpContext.Response.WriteAsync("Too many request. Please try laterl", cancellationToken);
-    };
-    _.GlobalLimiter = PartitionedRateLimiter.CreateChained(
-        PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
-        {
-            var userAgent = httpContext.Request.Headers.UserAgent.ToString();
+////Chained linmt 
+//builder.Services.AddRateLimiter(_ =>
+//{
+//    _.OnRejected = async (context, cancellationToken) =>
+//    {
+//        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+//        {
+//            context.HttpContext.Response.Headers.RetryAfter = ((int)retryAfter.TotalSeconds).ToString(NumberFormatInfo.InvariantInfo);
+//        }
+//        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+//        await context.HttpContext.Response.WriteAsync("Too many request. Please try laterl", cancellationToken);
+//    };
 
-            return RateLimitPartition.GetFixedWindowLimiter
-            (userAgent, _ => new FixedWindowRateLimiterOptions
-            {
-                AutoReplenishment = true,
-                PermitLimit = 4,
-                Window = TimeSpan.FromSeconds(2)
-            });
-        }),
-        PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
-        {
-            var userAgent = httpContext.Request.Headers.UserAgent.ToString();
+//    _.GlobalLimiter = PartitionedRateLimiter.CreateChained(
+//        PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+//        {
+//            var userAgent = httpContext.Request.Headers.UserAgent.ToString();
 
-            return RateLimitPartition.GetFixedWindowLimiter
-            (userAgent, _ => new FixedWindowRateLimiterOptions
-            {
-                AutoReplenishment = true,
-                PermitLimit = 30,
-                Window = TimeSpan.FromSeconds(20)
-            });
-        }));
-});
+//            return RateLimitPartition.GetFixedWindowLimiter
+//            (userAgent, _ => new FixedWindowRateLimiterOptions
+//            {
+//                AutoReplenishment = true,
+//                PermitLimit = 4,
+//                Window = TimeSpan.FromSeconds(2)
+//            });
+//        }),
+//        PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+//        {
+//            var userAgent = httpContext.Request.Headers.UserAgent.ToString();
+
+//            return RateLimitPartition.GetFixedWindowLimiter
+//            (userAgent, _ => new FixedWindowRateLimiterOptions
+//            {
+//                AutoReplenishment = true,
+//                PermitLimit = 30,
+//                Window = TimeSpan.FromSeconds(20)
+//            });
+//        }));
+//});
 
 
 
